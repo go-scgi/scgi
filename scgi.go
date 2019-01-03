@@ -64,9 +64,9 @@ func ReadNetstring(r *bufio.Reader) (string, error) {
 	return string(data), nil
 }
 
-type scgiClient struct{}
+type SCGIClient struct{}
 
-func (c *scgiClient) RoundTrip(req *http.Request) (*http.Response, error) {
+func (c *SCGIClient) RoundTrip(req *http.Request) (*http.Response, error) {
 	data, err := ioutil.ReadAll(req.Body)
 	if err != nil {
 		return nil, errors.Wrap(err, "scgi: round trip: body read error")
@@ -126,8 +126,7 @@ func (c *scgiClient) RoundTrip(req *http.Request) (*http.Response, error) {
 	// Grab the first line and chop off the extra characters from the end.
 	firstLine, err := scgiRead.ReadString('\n')
 	if err != nil {
-		// TODO: Wrap error
-		return nil, err
+		return nil, errors.Wrap(err, "scgi: round trip: invalid format")
 	}
 	if firstLine[len(firstLine)-1] == '\n' {
 		firstLine = firstLine[:len(firstLine)-1]
