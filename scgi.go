@@ -1,3 +1,9 @@
+// Package scgi provides a simple scgi client and a number of primitives needed
+// for basic scgi operation.
+//
+// There are two main ways to use this package. It can be used directly as a
+// net/http.Client's RoundTripper or it can be added to a net/http.Transport
+// using RegisterProtocol.
 package scgi // import "gopkg.in/scgi.v0"
 
 import (
@@ -13,6 +19,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+// WriteNetstring takes the given data and writes it in netstring format to the
+// given writer. It does not do any validation on the actual data.
 func WriteNetstring(w io.Writer, data []byte) error {
 	_, err := w.Write([]byte(strconv.Itoa(len(data))))
 	if err != nil {
@@ -37,6 +45,8 @@ func WriteNetstring(w io.Writer, data []byte) error {
 	return nil
 }
 
+// ReadNetstring assumes the next thing arriving from a bufio.Reader is a
+// netstring and attempts to read/parse it.
 func ReadNetstring(r *bufio.Reader) (string, error) {
 	dataLen, err := r.ReadString(':')
 	if err != nil {
@@ -64,22 +74,42 @@ func ReadNetstring(r *bufio.Reader) (string, error) {
 	return string(data), nil
 }
 
-type SCGIClient struct{}
+// Client is an implementation of net/http.RoundTripper which supports SCGI
+// sockets.
+//
+// This client supports three different types of urls:
+// - Relative socket path (scgi:///relative/path)
+// - Absolute socket path (scgi:////absolute/path)
+// - Host/Port (scgi://host:port)
+type Client struct{}
 
-func (c *SCGIClient) RoundTrip(req *http.Request) (*http.Response, error) {
+// RoundTrip implements the net/http.RoundTripper interface.
+func (c *Client) RoundTrip(req *http.Request) (*http.Response, error) {
+	if (req.URL.Host != "" && req.URL.Path != "") || (req.URL.Host == "" && req.URL.Path == "") {
+		return nil, errors.New("scgi: round trip: invalid scgi connection string")
+	}
+
 	data, err := ioutil.ReadAll(req.Body)
 	if err != nil {
 		return nil, errors.Wrap(err, "scgi: round trip: body read error")
 	}
 
-	// This allows for scgi://rtorrent to be relative and scgi:///tmp/rtorrent
-	// to be absolute.
-	path := req.URL.Path
-	if req.URL.Host != "" {
-		path = "./" + req.URL.Host + path
+	var scgiConn net.Conn
+	if req.URL.Host == "" {
+		// Chop off the first slash so it's possible to support relative paths.
+		path := req.URL.Path
+		if strings.HasPrefix(path, "/") {
+			path = path[1:]
+		}
+		scgiConn, err = net.Dial("unix", req.URL.Path)
+	} else {
+		host := req.URL.Hostname()
+		port := req.URL.Port()
+		if port == "" {
+			port = "80"
+		}
+		scgiConn, err = net.Dial("tcp", host+":"+port)
 	}
-
-	scgiConn, err := net.Dial("unix", path)
 
 	// Write the required SCGI headers
 	var headers = []string{
