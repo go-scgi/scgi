@@ -78,9 +78,10 @@ func ReadNetstring(r *bufio.Reader) (string, error) {
 // sockets.
 //
 // This client supports three different types of urls:
-// - Relative socket path (scgi:///relative/path)
-// - Absolute socket path (scgi:////absolute/path)
-// - Host/Port (scgi://host:port)
+//
+//     - Relative socket path (scgi:///relative/path)
+//     - Absolute socket path (scgi:////absolute/path)
+//     - Host/Port (scgi://host:port)
 type Client struct{}
 
 // RoundTrip implements the net/http.RoundTripper interface.
